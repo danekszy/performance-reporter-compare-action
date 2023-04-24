@@ -1,8 +1,8 @@
 {
-  "name": "@github/webpack-bundlesize-compare-action",
+  "name": "@danekszy/performance-reporter-compare-action",
   "version": "0.0.0",
   "private": true,
-  "description": "Github action to compare the size of two webpack bundles from their stats.json output files",
+  "description": "A github action that outputs performance reporter comparison tables for pull requests ",
   "main": "lib/src/main.js",
   "scripts": {
     "build": "tsc",
