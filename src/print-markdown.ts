@@ -1,5 +1,4 @@
-import {formatFileSizeIEC} from './file-sizes'
-import type {AssetDiff, WebpackStatsDiff} from './types'
+import type {MetricDiff, ReportDiff, TestAttributes} from './types'
 
 function conditionalPercentage(number: number): string {
   if ([Infinity, -Infinity].includes(number)) {
@@ -32,67 +31,52 @@ ${columns
   .join(' | ')}`
 }
 
-const TOTAL_HEADERS = makeHeader([
-  'Files count',
-  'Total bundle size',
-  '% Changed'
-])
-const TABLE_HEADERS = makeHeader(['Asset', 'File Size', '% Changed'])
+const TABLE_HEADERS = makeHeader(['Test Name', 'Metric', '% Changed'])
 
 function signFor(num: number): '' | '+' | '-' {
   if (num === 0) return ''
   return num > 0 ? '+' : '-'
 }
 
-function toFileSizeDiff(
-  oldSize: number | null,
-  newSize: number | null,
+function toMetricDiff(
+  oldMetric: TestAttributes,
+  newMetric: TestAttributes,
   diff?: number | undefined
 ): string {
   const diffLine = [
-    `${formatFileSizeIEC(oldSize)} -> ${formatFileSizeIEC(newSize)}`
+    `${oldMetric.avg} (± ${oldMetric.stdDev})ms -> ${newMetric.avg} (± ${newMetric.stdDev})ms`
   ]
   if (typeof diff !== 'undefined') {
-    diffLine.push(`(${signFor(diff)}${formatFileSizeIEC(diff)})`)
+    diffLine.push(`(${signFor(diff)}${diff}ms)`)
   }
   return diffLine.join(' ')
 }
 
-function toFileSizeDiffCell(asset: AssetDiff): string {
+function toMetricDiffCell(metricDiff: MetricDiff): string {
   const lines = []
-  if (asset.diff === 0) {
-    lines.push(formatFileSizeIEC(asset.new.size))
-    if (asset.new.gzipSize) {
-      lines.push(formatFileSizeIEC(asset.new.gzipSize))
-    }
+  if (metricDiff.diff === 0) {
+    lines.push(metricDiff.new.avg)
   } else {
-    lines.push(toFileSizeDiff(asset.old.size, asset.new.size, asset.diff))
-    if (asset.old.gzipSize || asset.new.gzipSize) {
-      lines.push(
-        `${toFileSizeDiff(asset.old.gzipSize, asset.new.gzipSize)} (gzip)`
-      )
-    }
+    lines.push(toMetricDiff(metricDiff.old, metricDiff.new, metricDiff.diff))
   }
 
   return lines.join('<br />')
 }
 
-function printAssetTableRow(asset: AssetDiff): string {
+function printAssetTableRow(asset: MetricDiff): string {
   return [
     asset.name,
-    toFileSizeDiffCell(asset),
+    toMetricDiffCell(asset),
     conditionalPercentage(asset.diffPercentage)
   ].join(' | ')
 }
 
-export function printAssetTablesByGroup(
-  statsDiff: Omit<WebpackStatsDiff, 'total'>
-): string {
+export function printMetricTablesByGroup(statsDiff: ReportDiff): string {
   const statsFields = [
     'added',
     'removed',
-    'bigger',
-    'smaller',
+    'slower',
+    'faster',
     'unchanged'
   ] as const
   return statsFields
@@ -101,7 +85,7 @@ export function printAssetTablesByGroup(
       if (assets.length === 0) {
         return `**${capitalize(field)}**
 
-No assets were ${field}`
+No metrics were ${field}`
       }
 
       return `**${capitalize(field)}**
@@ -114,89 +98,4 @@ ${assets
   .join('\n')}`
     })
     .join('\n\n')
-}
-
-const getDiffEmoji = (diff: AssetDiff): string =>
-  diff.diffPercentage === Infinity
-    ? '🆕'
-    : diff.diffPercentage <= -100
-    ? '🔥'
-    : diff.diffPercentage > 0
-    ? '📈'
-    : diff.diffPercentage < 0
-    ? '📉'
-    : ' '
-
-const getTrimmedChunkName = (chunkModule: AssetDiff): string => {
-  let chunkName = chunkModule.name
-  if (chunkName.startsWith('./')) {
-    chunkName = chunkName.substring(2)
-  } else if (chunkName.startsWith('/')) {
-    chunkName = chunkName.substring(1)
-  }
-  return chunkName
-}
-
-const CHUNK_TABLE_HEADERS = makeHeader(['File', 'Δ', 'Size'])
-
-function printChunkModuleRow(chunkModule: AssetDiff): string {
-  const emoji = getDiffEmoji(chunkModule)
-  const chunkName = getTrimmedChunkName(chunkModule)
-
-  return [
-    `\`${chunkName}\``,
-    `${emoji} ${chunkModule.diff >= 0 ? '+' : '-'}${formatFileSizeIEC(
-      chunkModule.diff
-    )}${
-      Number.isFinite(chunkModule.diffPercentage)
-        ? ` (${conditionalPercentage(chunkModule.diffPercentage)})`
-        : ''
-    }`,
-    `${formatFileSizeIEC(chunkModule.old.size)} -> ${formatFileSizeIEC(
-      chunkModule.new.size
-    )}`
-  ].join(' | ')
-}
-
-export function printChunkModulesTable(
-  statsDiff: Omit<WebpackStatsDiff, 'total' | 'unchanged'> | null
-): string {
-  if (!statsDiff) return ''
-  const changedModules = [
-    ...statsDiff.added,
-    ...statsDiff.removed,
-    ...statsDiff.bigger,
-    ...statsDiff.smaller
-  ].sort((a, b) => b.diffPercentage - a.diffPercentage)
-
-  if (changedModules.length === 0) {
-    return `
-Changeset
-
-No files were changed`
-  }
-
-  return `
-<details>
-<summary>Changeset${
-    changedModules.length > 100 ? ' (largest 100 files by percent change)' : ''
-  }</summary>
-
-${CHUNK_TABLE_HEADERS}
-${changedModules
-  .slice(0, 100)
-  .map(chunkModule => printChunkModuleRow(chunkModule))
-  .join('\n')}
-
-</details>
-`
-}
-
-export function printTotalAssetTable(
-  statsDiff: Pick<WebpackStatsDiff, 'total'>
-): string {
-  return `**Total**
-
-${TOTAL_HEADERS}
-${printAssetTableRow(statsDiff.total)}`
 }

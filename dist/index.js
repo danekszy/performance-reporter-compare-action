@@ -92,19 +92,81 @@ exports.getChunkModuleDiff = getChunkModuleDiff;
 
 /***/ }),
 
-/***/ 5476:
+/***/ 5379:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getMetricDiff = void 0;
+function getMetricDiff(name, oldMetric, newMetric) {
+    return {
+        name,
+        new: {
+            avg: newMetric.avg,
+            stdDev: newMetric.stdDev
+        },
+        old: {
+            avg: oldMetric.avg,
+            stdDev: oldMetric.stdDev
+        },
+        diff: newMetric.avg - oldMetric.avg,
+        diffPercentage: +((1 - newMetric.avg / oldMetric.avg) * -100).toFixed(5) || 0
+    };
+}
+exports.getMetricDiff = getMetricDiff;
+
+
+/***/ }),
+
+/***/ 2967:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getStatsDiff = void 0;
-const name_to_size_map_1 = __nccwpck_require__(5188);
-const webpack_stats_diff_1 = __nccwpck_require__(2572);
-function getStatsDiff(oldAssetStats, newAssetStats) {
-    return (0, webpack_stats_diff_1.webpackStatsDiff)((0, name_to_size_map_1.assetNameToSizeMap)(oldAssetStats.assets), (0, name_to_size_map_1.assetNameToSizeMap)(newAssetStats.assets));
+exports.getReportDiff = void 0;
+const get_metric_diff_1 = __nccwpck_require__(5379);
+const sort_diff_descending_1 = __nccwpck_require__(2458);
+function getReportDiff(oldReport, newReport) {
+    const added = [];
+    const removed = [];
+    const slower = [];
+    const faster = [];
+    const unchanged = [];
+    for (const [name, oldMetrics] of Object.entries(oldReport)) {
+        const newMetric = newReport[name];
+        if (!newMetric) {
+            removed.push((0, get_metric_diff_1.getMetricDiff)(name, oldMetrics, { avg: 0, stdDev: 0 }));
+        }
+        else {
+            const diff = (0, get_metric_diff_1.getMetricDiff)(name, oldMetrics, newMetric);
+            if (diff.diffPercentage > 5) {
+                slower.push(diff);
+            }
+            else if (diff.diffPercentage < 5) {
+                faster.push(diff);
+            }
+            else {
+                unchanged.push(diff);
+            }
+        }
+    }
+    for (const [name, newMetrics] of Object.entries(newReport)) {
+        const oldMetric = oldReport[name];
+        if (!oldMetric) {
+            added.push((0, get_metric_diff_1.getMetricDiff)(name, { avg: 0, stdDev: 0 }, newMetrics));
+        }
+    }
+    return {
+        added: (0, sort_diff_descending_1.sortDiffDescending)(added),
+        removed: (0, sort_diff_descending_1.sortDiffDescending)(removed),
+        slower: (0, sort_diff_descending_1.sortDiffDescending)(slower),
+        faster: (0, sort_diff_descending_1.sortDiffDescending)(faster),
+        unchanged
+    };
 }
-exports.getStatsDiff = getStatsDiff;
+exports.getReportDiff = getReportDiff;
 
 
 /***/ }),
@@ -150,8 +212,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const get_chunk_module_diff_1 = __nccwpck_require__(658);
-const get_stats_diff_1 = __nccwpck_require__(5476);
-const parse_stats_file_to_json_1 = __nccwpck_require__(2495);
+const get_report_diff_1 = __nccwpck_require__(2967);
+const parse_report_file_to_json_1 = __nccwpck_require__(5548);
 const to_comment_body_1 = __nccwpck_require__(4713);
 function run() {
     var _a;
@@ -163,13 +225,13 @@ function run() {
             }
             const { issue: { number: issue_number }, repo: { owner, repo: repo_name } } = github_1.context;
             const token = core.getInput('github-token');
-            const currentStatsJsonPath = core.getInput('current-stats-json-path');
-            const baseStatsJsonPath = core.getInput('base-stats-json-path');
+            const currentReportJsonPath = core.getInput('current-report-json-path');
+            const baseReportJsonPath = core.getInput('base-report-json-path');
             const title = (_a = core.getInput('title')) !== null && _a !== void 0 ? _a : '';
             const { rest } = (0, github_1.getOctokit)(token);
-            const [currentStatsJson, baseStatsJson, { data: comments }] = yield Promise.all([
-                (0, parse_stats_file_to_json_1.parseStatsFileToJson)(currentStatsJsonPath),
-                (0, parse_stats_file_to_json_1.parseStatsFileToJson)(baseStatsJsonPath),
+            const [currentReportJson, baseReportJson, { data: comments }] = yield Promise.all([
+                (0, parse_report_file_to_json_1.parseReportFileToJson)(currentReportJsonPath),
+                (0, parse_report_file_to_json_1.parseReportFileToJson)(baseReportJsonPath),
                 rest.issues.listComments({
                     repo: repo_name,
                     owner,
@@ -183,8 +245,8 @@ function run() {
                     comment.body &&
                     comment.body.includes(identifierComment);
             });
-            const statsDiff = (0, get_stats_diff_1.getStatsDiff)(baseStatsJson, currentStatsJson);
-            const chunkModuleDiff = (0, get_chunk_module_diff_1.getChunkModuleDiff)(baseStatsJson, currentStatsJson);
+            const statsDiff = (0, get_report_diff_1.getReportDiff)(baseReportJson, currentReportJson);
+            const chunkModuleDiff = (0, get_chunk_module_diff_1.getChunkModuleDiff)(baseReportJson, currentReportJson);
             const commentBody = (0, to_comment_body_1.getCommentBody)(statsDiff, chunkModuleDiff, title);
             const promises = [];
             if (restComments.length > 1) {
@@ -291,7 +353,7 @@ exports.chunkModuleNameToSizeMap = chunkModuleNameToSizeMap;
 
 /***/ }),
 
-/***/ 2495:
+/***/ 5548:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -329,26 +391,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.parseStatsFileToJson = void 0;
+exports.parseReportFileToJson = void 0;
 const fs_1 = __nccwpck_require__(7147);
 const path_1 = __nccwpck_require__(1017);
 const json_ext_1 = __nccwpck_require__(1451);
 const core = __importStar(__nccwpck_require__(2186));
-function parseStatsFileToJson(statsFilePath) {
+function parseReportFileToJson(statsFilePath) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const path = (0, path_1.resolve)(process.cwd(), statsFilePath);
-            return (yield (0, json_ext_1.parseChunked)((0, fs_1.createReadStream)(path)));
+            return yield (0, json_ext_1.parseChunked)((0, fs_1.createReadStream)(path));
         }
         catch (error) {
             if (error instanceof Error) {
                 core.warning(error);
             }
-            return { assets: [], chunks: undefined };
+            return {};
         }
     });
 }
-exports.parseStatsFileToJson = parseStatsFileToJson;
+exports.parseReportFileToJson = parseReportFileToJson;
 
 
 /***/ }),

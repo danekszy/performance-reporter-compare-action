@@ -1,27 +1,24 @@
-export type AssetDiff = {
+export type TestAttributes = {
+  avg: number
+  stdDev: number
+}
+
+export type MetricDiff = {
   name: string
-  new: {
-    size: number
-    gzipSize: number | null
-  }
-  old: {
-    size: number
-    gzipSize: number | null
-  }
+  new: TestAttributes
+  old: TestAttributes
   diff: number
   diffPercentage: number
 }
 
-export type Sizes = {
-  size: number
-  gzipSize: number | null
+export type ReportDiff = {
+  added: MetricDiff[]
+  removed: MetricDiff[]
+  slower: MetricDiff[]
+  faster: MetricDiff[]
+  unchanged: MetricDiff[]
 }
 
-export type WebpackStatsDiff = {
-  added: AssetDiff[]
-  removed: AssetDiff[]
-  bigger: AssetDiff[]
-  smaller: AssetDiff[]
-  unchanged: AssetDiff[]
-  total: AssetDiff
+export type ReportCompilation = {
+  [key: string]: TestAttributes
 }

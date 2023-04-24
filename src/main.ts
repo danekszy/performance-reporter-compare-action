@@ -1,8 +1,7 @@
 import * as core from '@actions/core'
 import {context, getOctokit} from '@actions/github'
-import {getChunkModuleDiff} from './get-chunk-module-diff'
-import {getStatsDiff} from './get-stats-diff'
-import {parseStatsFileToJson} from './parse-stats-file-to-json'
+import {getReportDiff} from './get-report-diff'
+import {parseReportFileToJson} from './parse-report-file-to-json'
 import {getCommentBody, getIdentifierComment} from './to-comment-body'
 
 async function run(): Promise<void> {
@@ -20,15 +19,15 @@ async function run(): Promise<void> {
       repo: {owner, repo: repo_name}
     } = context
     const token = core.getInput('github-token')
-    const currentStatsJsonPath = core.getInput('current-stats-json-path')
-    const baseStatsJsonPath = core.getInput('base-stats-json-path')
+    const currentReportJsonPath = core.getInput('current-report-json-path')
+    const baseReportJsonPath = core.getInput('base-report-json-path')
     const title = core.getInput('title') ?? ''
     const {rest} = getOctokit(token)
 
-    const [currentStatsJson, baseStatsJson, {data: comments}] =
+    const [currentReportJson, baseReportJson, {data: comments}] =
       await Promise.all([
-        parseStatsFileToJson(currentStatsJsonPath),
-        parseStatsFileToJson(baseStatsJsonPath),
+        parseReportFileToJson(currentReportJsonPath),
+        parseReportFileToJson(baseReportJsonPath),
         rest.issues.listComments({
           repo: repo_name,
           owner,
@@ -45,10 +44,9 @@ async function run(): Promise<void> {
         comment.body.includes(identifierComment)
     )
 
-    const statsDiff = getStatsDiff(baseStatsJson, currentStatsJson)
-    const chunkModuleDiff = getChunkModuleDiff(baseStatsJson, currentStatsJson)
+    const statsDiff = getReportDiff(baseReportJson, currentReportJson)
 
-    const commentBody = getCommentBody(statsDiff, chunkModuleDiff, title)
+    const commentBody = getCommentBody(statsDiff, title)
 
     const promises: Promise<unknown>[] = []
 
